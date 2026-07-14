@@ -8,4 +8,4 @@ neo4j-viz==1.6.0
 langchain_neo4j==0.10.0
 matplotlib==3.10.0
 seaborn==0.13.2
-graphiti_core
+graphiti_core==0.29.2
