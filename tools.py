@@ -15,6 +15,7 @@ from tqdm.auto import tqdm
 from openai import OpenAI
 from langchain_openai import ChatOpenAI
 from neo4j_graphrag.llm import OpenAILLM
+from langchain_openai import ChatOpenAI
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
@@ -40,16 +41,7 @@ open_ai_client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY"),
 )
 
-# # Initialize OpenAI LLM using LangChain
-# lang_llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name="gpt-4.1-mini", temperature=0)
 
-# # Neo4J LLM & embedder
-# llm = OpenAILLM(
-#     model_name="gpt-4.1-mini",
-#     model_params={"temperature": 0})
-
-from langchain_openai import ChatOpenAI
-from neo4j_graphrag.embeddings import OpenAIEmbeddings
 
 llm = ChatOpenAI(
     model_name="gpt-5-mini",
@@ -152,7 +144,7 @@ def generate_cypher_query_lcel(user_question: str) -> str:
     else:
         cypher_prompt_template = custom_text2cypher_prompt
 
-    cypher_chain = cypher_prompt_template | lang_llm
+    cypher_chain = cypher_prompt_template | llm
 
     result = cypher_chain.invoke({"query_text":user_question, "examples":examples})
 
