@@ -22,13 +22,13 @@ import os
 
 load_dotenv()  # This loads .env at project root
 
-NEO4J_URI = os.getenv('AV_NEO4J_URL')
-NEO4J_USERNAME = os.getenv('AV_NEO4J_USERNAME')
-NEO4J_PASSWORD = os.getenv('AV_NEO4J_PASSWORD')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+NEO4J_URI      = os.getenv('NEO4J_URI')
+NEO4J_USERNAME = os.getenv('NEO4J_USERNAME')
+NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD')
+NEO4J_DATABASE = os.getenv('NEO4J')
 
 # Set OPENAI_API_KEY as env variable for openai/neo4j-graphrag compatibility
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 driver = GraphDatabase.driver(
     NEO4J_URI,
@@ -41,11 +41,11 @@ open_ai_client = OpenAI(
 )
 
 # Initialize OpenAI LLM using LangChain
-lang_llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name="gpt-4.1", temperature=0)
+lang_llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name="gpt-4.1-mini", temperature=0)
 
 # Neo4J LLM & embedder
 llm = OpenAILLM(
-    model_name="gpt-4.1",
+    model_name="gpt-4.1-mini",
     model_params={"temperature": 0}
 )
 
