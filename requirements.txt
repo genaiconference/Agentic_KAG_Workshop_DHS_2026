@@ -14,3 +14,4 @@ tavily==1.1.0
 langfuse==4.14.1
 langchain_community==0.4.2
 chromadb==1.5.9
+rank_bm25==0.2.2
