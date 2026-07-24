@@ -11,5 +11,5 @@ seaborn==0.13.2
 graphiti_core==0.29.2
 langchain_openai==1.1.9
 tavily==1.1.0
-langfuse-4.14.1
-langchain_community-0.4.2
+langfuse==4.14.1
+langchain_community==0.4.2
