@@ -1,5 +1,5 @@
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import (
+from langchain_classic.agents import AgentExecutor, create_react_agent
+from langchain_classic.prompts import (
     ChatPromptTemplate,
     MessagesPlaceholder,
     HumanMessagePromptTemplate,
