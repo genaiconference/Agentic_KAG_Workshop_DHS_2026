@@ -13,13 +13,21 @@ By the end of the workshop, participants will be able to design GenAI systems th
 **Level**: Intermediate 
 ## What Participants Will Learn
 • Why traditional RAG and Agentic RAG struggle in complex, real-world scenarios
+
 • The role of graphs in improving retrieval, reasoning, and contextual grounding
+
 • Core concepts of knowledge graphs and different types of graphs
+
 • How to design and construct a knowledge graph from structured and unstructured data
+
 • Techniques to create meaningful interconnections across diverse data sources
+
 • Graph-based retrieval techniques and multi-hop reasoning patterns
+
 • How agents reason over graphs to enable richer decision-making
+
 • Designing and implementing Agentic Graph RAG architectures
+
 • Solving real-world GenAI problems using graph-powered systems
 
 ## Tools and Technologies
