@@ -35,13 +35,8 @@ Python, Google Colab, Neo4j, ChromaDB, LangChain, LangGraph, OpenAI, Tavily, and
 **Workshop Prerequisites Deck** - https://docs.google.com/presentation/d/14VZATDNBd78u6SC14LK8YCYYkNIIxOWJ/edit?usp=drive_link&ouid=114583280908361346744&rtpof=true&sd=true
 
 ### Conceptual Pre Requisites
-• Understanding of RAG
-• Python is required
-• Neo4j Sandbox Account
-• Open AI API key - text embedding small, GPT 5.1 and above 
-• Langfuse free tier 
-• Google Colab
-• Tavily web API Key 
+• Understanding of RAG | • Python is required
+
 
 ## Workshop Modules 
 **Agentic KAG Workshop Overview Deck** - https://docs.google.com/presentation/d/1R21n8hFQU9LtM0Gb5y9ddyac2PM2Gsw6/edit?usp=drive_link&ouid=114583280908361346744&rtpof=true&sd=true
@@ -69,5 +64,5 @@ Show how these analytics can refine retrieval (e.g. use communities for global c
 ### Module 5 – Evaluation & Comparison: Traditional RAG vs Agentic RAG vs GraphRAG vs Agentic KAG
 Use a small query set to qualitatively/quantitatively compare them on relevance, correctness, completeness, and faithfulness; discuss where graph‑ and agent‑enhanced approaches clearly outperform basic RAG.
 
-Module 6 – Capstone Integration & Demos 
-Participants  wire their “best” approach (e.g., GraphRAG or agentic KAG) to their KG built via SimpleKGBuilder into a simple end‑to‑end demo.
+### Module 6 – A Grand Capstone Project - Personalised Movie Recommendation AI Engine  
+Participants will bring all the concepts together and build a highly personalised movie recommendation engine using living knowledge graphs + Agentic KAG on Movie Intelligence & Web Search. 
