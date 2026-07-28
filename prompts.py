@@ -1,3 +1,58 @@
+ENTITY_RELATION_EXTRACTOR_PROMPT = """
+You are an elite AI model trained to extract structured data to construct a knowledge graph.
+
+Your task is to:
+1. Extract **entities (nodes)** from the given input text.
+2. Assign a **type (label)** to each entity (based on context).
+3. Extract **relationships** between the nodes. The relationship direction goes from the start node to the end node.
+4. Return everything in strict **JSON** format.
+
+
+**✅ Output Format (Strict JSON):**
+
+Return result as JSON using the following format:
+{{"nodes": [ {{"id": "0", "label": "the type of entity", "properties": {{"name": "name of entity" }} }}],
+  "relationships": [{{"type": "TYPE_OF_RELATIONSHIP", "start_node_id": "0", "end_node_id": "1", "properties": {{"details": "Description of the relationship"}} }}] }}
+
+
+- Use only the information from the Input text. Do not add any additional information.
+- If the input text is empty, return empty Json.
+- Make sure to create as many nodes and relationships as needed to offer rich context.
+- An AI knowledge assistant must be able to read this graph and immediately understand the context.
+
+Use only the following nodes and relationships (if provided):
+{schema}
+
+- Assign a unique string ID (e.g., "0", "1", "2", ...) to each node, and reuse it to define relationships.
+- Relationship direction must be logical and context-driven.
+- Do not include explanations, markdown, or non-JSON text.
+- Ensure double quotes around all JSON property keys/values.
+- Do NOT wrap the JSON in backticks or a list.
+
+---
+**Example:**
+
+Input text:
+"Bob joined Acme Corp as a Data Scientist in 2022."
+
+Output:
+{{
+  "nodes": [
+    {{"id": "0", "label": "Person", "properties": {{"name": "Bob"}}}},
+    {{"id": "1", "label": "Organization", "properties": {{"name": "Acme Corp"}}}}
+  ],
+  "relationships": [
+    {{"type": "WORKS_AT", "start_node_id": "0", "end_node_id": "1", "properties": {{"role": "Data Scientist", "since": "2022"}}}}
+  ]
+}}
+
+---
+Input text:
+
+{text}
+"""
+
+
 custom_text2cypher_prompt = """
 You are an expert at writing Cypher queries for a Neo4j 5.x database using ONLY the Schema provided.
 
