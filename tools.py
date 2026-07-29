@@ -57,6 +57,39 @@ FULLTEXT_INDEX_NAME = "entity_fulltext_index"
 
 DIMENSION = 1536
 
+#--------------------------------------------------------------------------------------------------Tool Descriptions-------------------------------------------------------------------------------------------------------------------------
+
+HYBRID_CYPHER_DESCRIPTION = """
+Purpose:
+Answer questions requiring graph traversal or relationship reasoning.
+
+Use when:
+- shortest paths
+- relationship exploration
+- multi-hop reasoning
+- shared actors/directors
+- graph connectivity
+
+Examples:
+- How is Inception connected to Interstellar?
+- Which actors worked with both Nolan and Villeneuve?
+- Movies sharing both genre and production company.
+
+Never use for:
+- general summaries
+- recommendations
+- simple entity lookup
+"""
+
+HYBRID_DESCRIPTION = """
+Purpose:
+Generic semantic fallback retrieval.
+
+Use ONLY when every other tool is unsuitable.
+
+Never choose this tool if another tool clearly matches.
+"""
+
 
 # -------------------------------------------------------------------------------------------------- Define Hybrid Retrieval Tool -----------------------------------------------------------------------------------------------------------
 def get_rag_for_query_hybrid(query: str):
@@ -86,7 +119,7 @@ hybrid_tool = Tool(
     name="Hybrid",
     func=get_rag_for_query_hybrid,
     description=(
-        "Use this tool as the last fallback option when every other tool fails."
+        HYBRID_DESCRIPTION
     )
 )
 
@@ -216,7 +249,7 @@ hybrid_cypher_tool = Tool(
     name="HybridCypher",
     func=get_rag_for_query_hybrid_cypher,
     description=(
-        "Use this tool for questions that require focused reasoning within the context of a known entity—such as follow-ups, clarifications, or multi-hop exploration around an anchor node or for multi-hop reasoning, fuzzy matching, or when the question is underspecified but linked to schema."
+        HYBRID_CYPHER_DESCRIPTION
     )
 )
 
@@ -285,10 +318,32 @@ def _all_community_summaries(driver, limit=100):
 # --- TOOL 1: GLOBAL SEARCH (theme-level, whole graph) ------------------------
 @tool
 def global_search_tool(question: str) -> str:
-    """Answer BROAD, thematic, or aggregate questions about the ENTIRE movie dataset
-    (e.g. "what genres/themes exist?", "summarize the dataset", "what kinds of movies
-    are here?"). It reasons over ALL community summaries, not individual movies.
-    Use this when the question is high-level and not about one specific movie/person."""
+    """Purpose:
+        Answer high-level questions requiring understanding of the ENTIRE movie graph.
+
+        Use when:
+        - overall trends
+        - summaries
+        - comparisons across communities
+        - dataset-wide insights
+        - graph overview
+        - themes
+        - statistics
+
+        Examples:
+        - Summarize this movie graph.
+        - What themes dominate?
+        - Compare sci-fi and fantasy communities.
+        - What genres are most common?
+
+        Never use for:
+        - specific movies
+        - actors
+        - directors
+        - recommendations
+        - follow-up questions
+        - entity lookup
+    """
     comms = _all_community_summaries(driver)
     if not comms:
         return "No community summaries found. Run Steps 2–4 first."
@@ -313,10 +368,30 @@ def global_search_tool(question: str) -> str:
 # --- TOOL 2: LOCAL SEARCH (entity/topic-specific) ---------------------------
 @tool
 def local_search_tool(question: str) -> str:
-    """Answer SPECIFIC questions about particular movies, people, genres, or narrow topics
-    (e.g. "which crime movies feature actor X?", "movies about time travel"). It finds the
-    most relevant communities, then drills into their Movie members for grounded detail.
-    Use this when the question targets specific entities rather than the whole dataset."""
+    """Purpose:
+        Answer questions about SPECIFIC entities.
+
+        Use when the question mentions:
+        - movie
+        - actor
+        - director
+        - genre
+        - production company
+        - keyword
+        - franchise
+        - language
+        - country
+
+        Examples:
+        - Movies like Inception
+        - Christopher Nolan movies
+        - Movies starring Tom Hanks
+        - Crime movies from the 1990s
+
+        Never use for:
+        - graph summaries
+        - trends
+        - dataset statistics"""
     comms = find_relevant_communities(driver, question, embeddings=embedder, top_k=3)
     if not comms:
         return "No relevant communities found. Run Steps 2–4 first."
