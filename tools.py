@@ -82,8 +82,8 @@ def get_rag_for_query_hybrid(query: str):
     return response.answer
 
 
-av_hybrid_tool = Tool(
-    name="AVHybrid",
+hybrid_tool = Tool(
+    name="Hybrid",
     func=get_rag_for_query_hybrid,
     description=(
         "Use this tool as the last fallback option when every other tool fails."
@@ -212,8 +212,8 @@ def get_rag_for_query_hybrid_cypher(query: str):
     return response.answer
 
 
-av_hybrid_cypher_tool = Tool(
-    name="AVHybridCypher",
+hybrid_cypher_tool = Tool(
+    name="HybridCypher",
     func=get_rag_for_query_hybrid_cypher,
     description=(
         "Use this tool for questions that require focused reasoning within the context of a known entity—such as follow-ups, clarifications, or multi-hop exploration around an anchor node or for multi-hop reasoning, fuzzy matching, or when the question is underspecified but linked to schema."
@@ -284,7 +284,7 @@ def _all_community_summaries(driver, limit=100):
 
 # --- TOOL 1: GLOBAL SEARCH (theme-level, whole graph) ------------------------
 @tool
-def global_search(question: str) -> str:
+def global_search_tool(question: str) -> str:
     """Answer BROAD, thematic, or aggregate questions about the ENTIRE movie dataset
     (e.g. "what genres/themes exist?", "summarize the dataset", "what kinds of movies
     are here?"). It reasons over ALL community summaries, not individual movies.
@@ -312,12 +312,12 @@ def global_search(question: str) -> str:
 
 # --- TOOL 2: LOCAL SEARCH (entity/topic-specific) ---------------------------
 @tool
-def local_search(question: str) -> str:
+def local_search_tool(question: str) -> str:
     """Answer SPECIFIC questions about particular movies, people, genres, or narrow topics
     (e.g. "which crime movies feature actor X?", "movies about time travel"). It finds the
     most relevant communities, then drills into their Movie members for grounded detail.
     Use this when the question targets specific entities rather than the whole dataset."""
-    comms = find_relevant_communities(driver, question, embeddings=embeddings, top_k=3)
+    comms = find_relevant_communities(driver, question, embeddings=embedder, top_k=3)
     if not comms:
         return "No relevant communities found. Run Steps 2–4 first."
     ids = [c["id"] for c in comms]
