@@ -223,159 +223,120 @@ av_hybrid_cypher_tool = Tool(
 
 # ------------------------------------------------------------------------------------------------- Define Global Search Tool ---------------------------------------------------------------------------------------------------------
 
-# def get_map_system_prompt(context):
-#     return MAP_SYSTEM_PROMPT.format(context_data=context)
+def find_relevant_communities(driver, question, embeddings=None, top_k=3):
+    """Return the top-k communities most relevant to `question`.
+
+    Uses the vector index when an embedding model is available, otherwise
+    falls back to a simple keyword CONTAINS match on the summary/title.
+    """
+    if embeddings is not None:
+        qvec = embeddings.embed_query(question)
+        cypher = """
+        CALL db.index.vector.queryNodes('community_embedding', $k, $qvec)
+        YIELD node, score
+        RETURN node.id AS id, node.title AS title, node.summary AS summary, score
+        ORDER BY score DESC
+        """
+        params = {"k": top_k, "qvec": qvec}
+    else:
+        # Keyword fallback: match any word from the question against summary/title.
+        words = [w for w in question.lower().split() if len(w) > 3]
+        cypher = """
+        MATCH (c:Community)
+        WHERE any(w IN $words WHERE toLower(coalesce(c.summary,'') + ' ' + coalesce(c.title,'')) CONTAINS w)
+        RETURN c.id AS id, c.title AS title, c.summary AS summary, 0.0 AS score
+        LIMIT $k
+        """
+        params = {"words": words, "k": top_k}
+
+    with driver.session() as s:
+        return [r.data() for r in s.run(cypher, **params)]
 
 
-# def get_reduce_system_prompt(report_data, response_type: str = "multiple paragraphs"):
-#     return REDUCE_SYSTEM_PROMPT.format(report_data=report_data, response_type=response_type)
+def movies_in_communities(driver, community_ids, limit_per_community=10):
+    """Traverse :IN_COMMUNITY to fetch Movie members for the given communities."""
+    cypher = """
+    MATCH (c:Community)<-[:IN_COMMUNITY]-(m:Movie)
+    WHERE c.id IN $ids
+    WITH c, collect(DISTINCT m.title)[0..$lim] AS movies
+    RETURN c.id AS community, c.title AS title, movies
+    """
+    with driver.session() as s:
+        return [r.data() for r in s.run(cypher, ids=community_ids, lim=limit_per_community)]
 
 
-# # --- Phase 1: Define the map chain ---
-# def format_map_prompt(summary):
-#     return {
-#         "role": "system",
-#         "content": get_map_system_prompt(summary)
-#     }
+# %pip install --quiet langchain langchainhub langchain-openai
+from langchain_core.tools import tool
 
 
-# map_prompt_chain = (
-#         RunnableLambda(lambda inputs: [
-#             format_map_prompt(inputs["summary"]),
-#             {"role": "user", "content": inputs["query"]}
-#         ])
-#         | lang_llm
-# )
+# --- Helpers backing the tools ----------------------------------------------
+def _all_community_summaries(driver, limit=100):
+    q = """
+    MATCH (c:Community)
+    WHERE c.summary IS NOT NULL
+    RETURN c.id AS id, c.title AS title, c.summary AS summary, coalesce(c.size, 0) AS size
+    ORDER BY size DESC
+    LIMIT $limit
+    """
+    with driver.session() as s:
+        return [r.data() for r in s.run(q, limit=limit)]
 
 
-# # --- Phase 2: Define the reduce chain ---
-# def format_reduce_prompt(intermediate_results):
-#     return [
-#         {
-#             "role": "system",
-#             "content": get_reduce_system_prompt(intermediate_results)
-#         },
-#         {"role": "user", "content": intermediate_results[0]["query"]}
-#     ]
+# --- TOOL 1: GLOBAL SEARCH (theme-level, whole graph) ------------------------
+@tool
+def global_search(question: str) -> str:
+    """Answer BROAD, thematic, or aggregate questions about the ENTIRE movie dataset
+    (e.g. "what genres/themes exist?", "summarize the dataset", "what kinds of movies
+    are here?"). It reasons over ALL community summaries, not individual movies.
+    Use this when the question is high-level and not about one specific movie/person."""
+    comms = _all_community_summaries(driver)
+    if not comms:
+        return "No community summaries found. Run Steps 2–4 first."
+    context = "\n".join(
+        f"- {c.get('title') or c['id']} ({c['size']} members): {c['summary']}"
+        for c in comms
+    )
+    if llm is None:
+        return "🔎 (no LLM) Community summaries:\n\n" + context
+    prompt = (
+        "You are answering a BROAD question about a movie dataset using the "
+        "community summaries below. Synthesize across communities.\n\n"
+        f"Question: {question}\n\nCommunity summaries:\n{context}\n\n"
+        "Give a concise, thematic answer."
+    )
+    return getattr(llm.invoke(prompt), "content", "")
 
-
-# reduce_prompt_chain = (
-#         RunnableLambda(format_reduce_prompt)
-#         | lang_llm
-# )
-
-
-# def get_community_data(rating_threshold: float = 5):
-#     community_data, _, _ = driver.execute_query(
-#         """
-#         MATCH (c:__Community__)
-#         WHERE c.rating >= $rating
-#         RETURN c.summary AS summary
-#         """,
-#         rating=rating_threshold,
-#     )
-#     print(f"Got {len(community_data)} community summaries")
-#     return community_data
-
-
-# community_data = get_community_data()
-
-# from concurrent.futures import ThreadPoolExecutor, as_completed
-# from tqdm import tqdm
-
-
-# def global_retriever(query: str, community_data: list) -> str:
-#     intermediate_results = []
-
-#     def process_community(community):
-#         result = map_prompt_chain.invoke({
-#             "summary": community["summary"],
-#             "query": query
-#         })
-#         return result
-
-#     with ThreadPoolExecutor() as executor:
-#         futures = [executor.submit(process_community, c) for c in community_data]
-#         for f in tqdm(as_completed(futures), total=len(futures), desc="Processing communities in parallel"):
-#             intermediate_results.append(f.result())
-
-#     reduce_input = [
-#         {"query": query, "response": r.content if hasattr(r, 'content') else r}
-#         for r in intermediate_results
-#     ]
-#     final_result = reduce_prompt_chain.invoke(reduce_input)
-#     answer = final_result.content if hasattr(final_result, 'content') else final_result
-#     return answer
-
-
-# global_retriever_tool = Tool(
-#     name="GlobalRetrieval",
-#     func=lambda query: global_retriever(query, community_data),
-#     description=(
-#         "Use this tool for questions that require broad themes or questions that require semantic retrieval across the entire knowledge graph—especially when the query lacks a specific anchor or involves open-ended discovery across communities"
-#         )
-# )
 
 
 # # ------------------------------------------------------------------------------------------------- Define Local Search Tool ---------------------------------------------------------------------------------------------------------
 
-# def get_local_system_prompt(report_data, response_type: str = "multiple paragraphs"):
-#     return LOCAL_SEARCH_SYSTEM_PROMPT.format(context_data=report_data, response_type=response_type)
+# --- TOOL 2: LOCAL SEARCH (entity/topic-specific) ---------------------------
+@tool
+def local_search(question: str) -> str:
+    """Answer SPECIFIC questions about particular movies, people, genres, or narrow topics
+    (e.g. "which crime movies feature actor X?", "movies about time travel"). It finds the
+    most relevant communities, then drills into their Movie members for grounded detail.
+    Use this when the question targets specific entities rather than the whole dataset."""
+    comms = find_relevant_communities(driver, question, embeddings=embeddings, top_k=3)
+    if not comms:
+        return "No relevant communities found. Run Steps 2–4 first."
+    ids = [c["id"] for c in comms]
+    movie_rows = movies_in_communities(driver, ids)
+    context_lines = []
+    for c in comms:
+        movies = next((m["movies"] for m in movie_rows if m["community"] == c["id"]), [])
+        context_lines.append(
+            f"- {c.get('title') or c['id']}: {c['summary']}\n"
+            f"  Movies: {', '.join(movies) if movies else '(none)'}"
+        )
+    context = "\n".join(context_lines)
+    if llm is None:
+        return "🔎 (no LLM) Retrieved context:\n\n" + context
+    prompt = (
+        "Answer the question using ONLY the community context below.\n\n"
+        f"Question: {question}\n\nCommunity context:\n{context}\n\n"
+        "Give a concise, grounded answer and mention relevant movies."
+    )
+    return getattr(llm.invoke(prompt), "content", "")
 
 
-# def embed(texts, model="text-embedding-3-small"):
-#     response = open_ai_client.embeddings.create(
-#         input=texts,
-#         model=model,
-#     )
-#     return list(map(lambda n: n.embedding, response.data))
-
-
-# def chat(messages, model="gpt-4o", temperature=0, config={}):
-#     response = open_ai_client.chat.completions.create(
-#         model=model,
-#         temperature=temperature,
-#         messages=messages,
-#         **config,
-#     )
-#     return response.choices[0].message.content
-
-
-# k_entities = 5
-
-# topChunks = 3
-# topCommunities = 3
-# topInsideRels = 3
-
-
-# def local_search(query: str) -> str:
-#     context, _, _ = driver.execute_query(
-#         local_search_query,
-#         embedding=embed(query)[0],
-#         topChunks=topChunks,
-#         topCommunities=topCommunities,
-#         topInsideRels=topInsideRels,
-#         k=k_entities,
-#     )
-#     context_str = str(context[0]["text"])
-#     local_messages = [
-#         {
-#             "role": "system",
-#             "content": get_local_system_prompt(context_str),
-#         },
-#         {
-#             "role": "user",
-#             "content": query,
-#         },
-#     ]
-#     final_answer = chat(local_messages, model="gpt-4o")
-#     return final_answer
-
-
-# local_retriever_tool = Tool(
-#     name="LocalRetrieval",
-#     func=local_search,
-#     description=(
-#         "Use Local Search when the AVHybridCypher tool fails and if the question is grounded in a specific entity or node and needs multi-hop reasoning over nearby relationships. Best for follow-up questions or contextual deep dives."
-#     ),
-# )
