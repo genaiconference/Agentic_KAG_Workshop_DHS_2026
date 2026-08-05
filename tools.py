@@ -433,19 +433,19 @@ def local_search_tool(question: str) -> str:
         - graph summaries
         - trends
         - dataset statistics"""
-  comms=find_relevant_communities(driver,question,embeddings)
-  if not comms:
-      return "No relevant communities found. Run Steps 2–4 first."
-  ids=[c["id"] for c in comms]
-  entities=retrieve_entities(driver,ids)
-  rels=retrieve_relationships(driver,ids)
-  texts=retrieve_source_text(driver,ids)
-  context=build_local_context(comms,entities,rels,texts)
-  prompt = (
-      "Answer the question using ONLY the community context below.\n\n"
-      f"Question: {question}\n\nCommunity context:\n{context}\n\n"
-      "Give a concise, grounded answer and mention relevant movies."
-  )
-  return getattr(llm.invoke(prompt), "content", "")
+    comms=find_relevant_communities(driver,question,embedder)
+    if not comms:
+        return "No relevant communities found. Run Steps 2–4 first."
+    ids=[c["id"] for c in comms]
+    entities=retrieve_entities(driver,ids)
+    rels=retrieve_relationships(driver,ids)
+    texts=retrieve_source_text(driver,ids)
+    context=build_local_context(comms,entities,rels,texts)
+    prompt = (
+        "Answer the question using ONLY the community context below.\n\n"
+        f"Question: {question}\n\nCommunity context:\n{context}\n\n"
+        "Give a concise, grounded answer and mention relevant movies."
+    )
+    return getattr(llm.invoke(prompt), "content", "")
 
 
