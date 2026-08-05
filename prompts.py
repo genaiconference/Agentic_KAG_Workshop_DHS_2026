@@ -117,7 +117,7 @@ Keyword:
   SKIP,
   LIMIT,
   UNION,
-  CALL { }
+  CALL
 
 - Never use:
   CREATE,
