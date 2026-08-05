@@ -433,26 +433,19 @@ def local_search_tool(question: str) -> str:
         - graph summaries
         - trends
         - dataset statistics"""
-    comms = find_relevant_communities(driver, question, embeddings=embedder, top_k=3)
-    if not comms:
-        return "No relevant communities found. Run Steps 2–4 first."
-    ids = [c["id"] for c in comms]
-    movie_rows = movies_in_communities(driver, ids)
-    context_lines = []
-    for c in comms:
-        movies = next((m["movies"] for m in movie_rows if m["community"] == c["id"]), [])
-        context_lines.append(
-            f"- {c.get('title') or c['id']}: {c['summary']}\n"
-            f"  Movies: {', '.join(movies) if movies else '(none)'}"
-        )
-    context = "\n".join(context_lines)
-    if llm is None:
-        return "🔎 (no LLM) Retrieved context:\n\n" + context
-    prompt = (
-        "Answer the question using ONLY the community context below.\n\n"
-        f"Question: {question}\n\nCommunity context:\n{context}\n\n"
-        "Give a concise, grounded answer and mention relevant movies."
-    )
-    return getattr(llm.invoke(prompt), "content", "")
+  comms=find_relevant_communities(driver,question,embeddings)
+  if not comms:
+      return "No relevant communities found. Run Steps 2–4 first."
+  ids=[c["id"] for c in comms]
+  entities=retrieve_entities(driver,ids)
+  rels=retrieve_relationships(driver,ids)
+  texts=retrieve_source_text(driver,ids)
+  context=build_local_context(comms,entities,rels,texts)
+  prompt = (
+      "Answer the question using ONLY the community context below.\n\n"
+      f"Question: {question}\n\nCommunity context:\n{context}\n\n"
+      "Give a concise, grounded answer and mention relevant movies."
+  )
+  return getattr(llm.invoke(prompt), "content", "")
 
 
