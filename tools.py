@@ -364,6 +364,47 @@ def global_search_tool(question: str) -> str:
 
 
 # # ------------------------------------------------------------------------------------------------- Define Local Search Tool ---------------------------------------------------------------------------------------------------------
+def retrieve_entities(driver, ids):
+    cypher="""
+    MATCH (c:Community)<-[:IN_COMMUNITY]-(n)
+    WHERE c.id IN $ids
+    RETURN c.id AS community, collect(DISTINCT coalesce(n.title,n.name)) AS entities
+    """
+    with driver.session() as s:
+        return [r.data() for r in s.run(cypher,ids=ids)]
+
+
+def retrieve_relationships(driver, ids):
+    cypher="""
+    MATCH (c:Community)<-[:IN_COMMUNITY]-(a)-[r]-(b)
+    WHERE c.id IN $ids
+    RETURN c.id AS community,
+           collect(DISTINCT {source:coalesce(a.title,a.name),rel:type(r),target:coalesce(b.title,b.name)}) AS relationships
+    """
+    with driver.session() as s:
+        return [r.data() for r in s.run(cypher,ids=ids)]
+
+def retrieve_source_text(driver, ids):
+    cypher="""
+    MATCH (c:Community)<-[:IN_COMMUNITY]-(m:Movie)
+    WHERE c.id IN $ids
+    RETURN c.id AS community, collect(DISTINCT m.overview)[0..10] AS text_units
+    """
+    with driver.session() as s:
+        return [r.data() for r in s.run(cypher,ids=ids)]
+        
+
+def build_local_context(comms, entities, rels, texts):
+    sections=[]
+    for c in comms:
+        cid=c["id"]
+        e=next((x for x in entities if x["community"]==cid),{})
+        r=next((x for x in rels if x["community"]==cid),{})
+        t=next((x for x in texts if x["community"]==cid),{})
+        sections.append(
+            f"Community Report\n{c['summary']}\n\nEntities\n{e.get('entities',[])}\n\nRelationships\n{r.get('relationships',[])}\n\nSource Text\n{t.get('text_units',[])}"
+        )
+    return "\n\n".join(sections)
 
 # --- TOOL 2: LOCAL SEARCH (entity/topic-specific) ---------------------------
 @tool
