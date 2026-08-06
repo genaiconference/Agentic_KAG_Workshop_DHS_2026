@@ -1,20 +1,12 @@
-from neo4j_graphrag.schema import get_schema
-from neo4j_graphrag.retrievers import HybridCypherRetriever, Text2CypherRetriever
+from neo4j_graphrag.retrievers import HybridCypherRetriever
 from neo4j_graphrag.retrievers import HybridRetriever
-from neo4j_graphrag.types import LLMMessage
 from neo4j_graphrag.types import RetrieverResultItem
-from neo4j_graphrag.message_history import InMemoryMessageHistory
 from neo4j_graphrag.generation import GraphRAG, RagTemplate
 from langchain_core.tools import Tool
 from prompts import rag_prompt, custom_text2cypher_prompt
 from examples import examples
 from langchain_classic.prompts import PromptTemplate
-#from cypher import local_search_query
-from langchain_core.runnables import RunnableLambda
-from tqdm.auto import tqdm
 from openai import OpenAI
-from langchain_openai import ChatOpenAI
-from neo4j_graphrag.llm import OpenAILLM
 from langchain_openai import ChatOpenAI
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
 from dotenv import load_dotenv
@@ -152,22 +144,6 @@ def result_formatter_dynamic(record):
     )
 
 
-def generate_cypher_query(query):
-    """
-    Generate Cypher using the Text2Cypher Retriever
-
-    """
-    t2c_retriever = Text2CypherRetriever(
-        llm=llm,
-        neo4j_schema=get_schema(driver),
-        driver=driver,
-        custom_prompt=custom_text2cypher_prompt,
-        examples=examples,
-    )
-    response = t2c_retriever.search(query_text=query)
-    return response.metadata['cypher']
-
-
 def generate_cypher_query_lcel(user_question: str) -> str:
     """
     Converts a natural language question into a read-only Cypher query.
@@ -189,34 +165,6 @@ def generate_cypher_query_lcel(user_question: str) -> str:
     result = cypher_chain.invoke({"query_text":user_question, "examples":examples})
 
     return result.content
-
-
-
-def get_rag_for_query_text2cypher(query: str):
-    """
-    Wrapper to generate a Rag object dynamically for each query
-    """
-    t2c_retriever = Text2CypherRetriever(
-        llm=llm,
-        neo4j_schema=get_schema(driver),
-        driver=driver,
-        custom_prompt=custom_text2cypher_prompt,
-        examples=examples,
-    )
-
-    custom_template = RagTemplate(template=rag_prompt,
-                                  expected_inputs=["context", "query_text"],
-                                  )
-
-    rag_obj = GraphRAG(retriever=t2c_retriever, llm=llm, prompt_template=custom_template)
-
-    response = rag_obj.search(
-        query,
-        return_context=True,
-        retriever_config={'top_k': 20},
-        response_fallback="I can't answer this question without context"
-    )
-    return response.answer
 
 
 def get_rag_for_query_hybrid_cypher(query: str):
