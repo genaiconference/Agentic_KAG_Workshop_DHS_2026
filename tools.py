@@ -81,47 +81,54 @@ Never use for:
 - simple entity lookup
 """
 
-HYBRID_DESCRIPTION = """
+
+TEXT2CYPHER_DESCRIPTION = """
 Purpose:
-Generic semantic fallback retrieval.
+Answer precise, structured questions by translating natural language into a
+Cypher query, executing it on the graph, and returning a grounded answer.
 
-Use ONLY when every other tool is unsuitable.
+Use when the question needs exact, deterministic results such as:
+- counts / aggregations (how many, average, total)
+- filtering by properties (year, rating, language, runtime)
+- ranking / top-N (highest-rated, longest, most common)
+- lookups that map cleanly to structured graph patterns
 
-Never choose this tool if another tool clearly matches.
+Examples:
+- List the top 10 highest-rated Hindi movies.
+- How many movies are in the graph?
+- Which movies did Christopher Nolan direct?
+- Comedy movies released after 2015.
+
+Never use for:
+- open-ended summaries or themes
+- semantic similarity / recommendations
 """
 
 
-# -------------------------------------------------------------------------------------------------- Define Hybrid Retrieval Tool -----------------------------------------------------------------------------------------------------------
-def get_rag_for_query_hybrid(query: str):
-    """
-    Wrapper to generate a Rag object dynamically for each query
-    """
-    hybrid_retriever = HybridRetriever(
-        driver=driver,
-        vector_index_name="movie_embedding_index",
-        fulltext_index_name="movie_text_index",
-        embedder=embedder,
-    )
+WEB_SEARCH_DESCRIPTION = """
+Purpose:
+Search the live web (via Tavily) for up-to-date movie information that is NOT
+in the knowledge graph.
 
-    custom_template = RagTemplate(template=rag_prompt,
-                                  expected_inputs=["context", "query_text"],
-                                  )
+Use when the question is about latest / recent / current / upcoming movies or
+real-world facts that change over time, such as:
+- newly released or upcoming movies (this week, this month, this year)
+- current box-office numbers, recent awards, latest news
+- release dates, trailers, or cast announcements for new films
+- anything requiring information more recent than the graph's data
 
-    rag_obj = GraphRAG(retriever=hybrid_retriever, llm=llm, prompt_template=custom_template)
+Examples:
+- What are the latest movies released this week?
+- Upcoming Marvel movies in 2026.
+- Recent Oscar winners.
+- What is the newest Christopher Nolan movie?
 
-    response = rag_obj.search(
-        query,
-    )
-    return response.answer
+Never use for:
+- questions answerable from the movie knowledge graph
+- historical/static facts already stored in the graph
+"""
 
 
-hybrid_tool = Tool(
-    name="Hybrid",
-    func=get_rag_for_query_hybrid,
-    description=(
-        HYBRID_DESCRIPTION
-    )
-)
 
 
 # -------------------------------------------------------------------------------------------------- Define Hybrid Cypher Retrieval Tool -----------------------------------------------------------------------------------------------------
@@ -250,6 +257,133 @@ hybrid_cypher_tool = Tool(
     func=get_rag_for_query_hybrid_cypher,
     description=(
         HYBRID_CYPHER_DESCRIPTION
+    )
+)
+
+# ------------------------------------------------------------------------------------------------- Define Text2Cypher Tool (LangChain GraphCypherQAChain) ---------------------------------------------------------------------------------------------------------
+# This tool follows the LangChain `GraphCypherQAChain` concept used in
+# 08_text2cypher_workshop_demo.ipynb: it wraps the Neo4j database with a
+# `Neo4jGraph` (which exposes the schema), lets the LLM generate a Cypher query,
+# validates/corrects the relationship directions, executes it, and synthesizes a
+# natural-language answer from the results.
+
+# Build the LangChain Neo4jGraph + GraphCypherQAChain once and reuse them.
+_text2cypher_chain = None
+
+
+def _get_text2cypher_chain():
+    """Lazily build (and cache) the LangChain GraphCypherQAChain."""
+    global _text2cypher_chain
+    if _text2cypher_chain is None:
+        from langchain_neo4j import Neo4jGraph, GraphCypherQAChain
+
+        graph = Neo4jGraph(
+            url=NEO4J_URI,
+            username=NEO4J_USERNAME,
+            password=NEO4J_PASSWORD,
+            database=NEO4J_DATABASE or "neo4j",
+            enhanced_schema=True,   # richer schema improves Cypher generation
+        )
+        graph.refresh_schema()
+
+        _text2cypher_chain = GraphCypherQAChain.from_llm(
+            llm=llm,
+            graph=graph,
+            verbose=True,
+            return_intermediate_steps=True,
+            allow_dangerous_requests=True,   # use a READ-ONLY Neo4j user in production
+        )
+    return _text2cypher_chain
+
+
+def get_answer_for_query_text2cypher_lc(query: str):
+    """
+    Translate a natural-language question into Cypher using LangChain's
+    GraphCypherQAChain, execute it against Neo4j, and return a grounded answer.
+    """
+    chain = _get_text2cypher_chain()
+    result = chain.invoke({"query": query})
+
+    # Surface the generated Cypher for transparency/debugging.
+    for step in result.get("intermediate_steps", []):
+        if isinstance(step, dict) and "query" in step:
+            print("Generated Cypher:\n", step["query"])
+
+    return result["result"]
+
+
+text2cypher_tool = Tool(
+    name="Text2Cypher",
+    func=get_answer_for_query_text2cypher_lc,
+    description=(
+        TEXT2CYPHER_DESCRIPTION
+    )
+)
+
+# ------------------------------------------------------------------------------------------------- Define Web Search Tool (Tavily) ---------------------------------------------------------------------------------------------------------
+# A live web-search tool backed by the Tavily API. The agent should pick this
+# tool for questions about the LATEST / RECENT / UPCOMING movies or any
+# real-world facts that are newer than the knowledge graph.
+
+# Build the Tavily client once and reuse it.
+_tavily_client = None
+
+
+def _get_tavily_client():
+    """Lazily build (and cache) the Tavily client."""
+    global _tavily_client
+    if _tavily_client is None:
+        from tavily import TavilyClient
+        _tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+    return _tavily_client
+
+
+def web_search(query: str):
+    """
+    Search the live web via Tavily for the latest/recent movie information and
+    return an LLM-synthesized answer grounded in the search results.
+    """
+    if not TAVILY_API_KEY:
+        return ("Web search is unavailable: TAVILY_API_KEY is not set. "
+                "Add it to your .env to enable the Web Search tool.")
+
+    client = _get_tavily_client()
+    results = client.search(
+        query=query,
+        search_depth="advanced",
+        max_results=5,
+        include_answer=True,
+        topic="general",
+    )
+
+    # Tavily can return a ready-made answer; prefer it, else build context.
+    tavily_answer = results.get("answer")
+    sources = results.get("results", [])
+    context = "\n\n".join(
+        f"Title: {r.get('title')}\nURL: {r.get('url')}\nContent: {r.get('content')}"
+        for r in sources
+    )
+
+    if llm is None:
+        return tavily_answer or ("Web results:\n\n" + context)
+
+    prompt = (
+        "You are answering a question about the LATEST/RECENT movies using the "
+        "live web search results below. Give a concise, up-to-date answer and "
+        "cite the source titles.\n\n"
+        f"Question: {query}\n\n"
+        f"Tavily answer (may be empty): {tavily_answer}\n\n"
+        f"Search results:\n{context}\n\n"
+        "Answer:"
+    )
+    return getattr(llm.invoke(prompt), "content", "")
+
+
+web_search_tool = Tool(
+    name="WebSearch",
+    func=web_search,
+    description=(
+        WEB_SEARCH_DESCRIPTION
     )
 )
 
