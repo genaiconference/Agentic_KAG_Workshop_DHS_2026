@@ -18,10 +18,13 @@ load_dotenv()  # This loads .env at project root
 NEO4J_URI      = os.getenv('NEO4J_URI')
 NEO4J_USERNAME = os.getenv('NEO4J_USERNAME')
 NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD')
-NEO4J_DATABASE = os.getenv('NEO4J')
+NEO4J_DATABASE = os.getenv('NEO4J_DATABASE')
 
 # Set OPENAI_API_KEY as env variable for openai/neo4j-graphrag compatibility
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Tavily web-search API key (used by the Web Search tool for latest/recent movies)
+TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
 
 driver = GraphDatabase.driver(
     NEO4J_URI,
@@ -200,14 +203,6 @@ def get_rag_for_query_hybrid_cypher(query: str):
     return response.answer
 
 
-hybrid_cypher_tool = Tool(
-    name="HybridCypher",
-    func=get_rag_for_query_hybrid_cypher,
-    description=(
-        HYBRID_CYPHER_DESCRIPTION
-    )
-)
-
 # ------------------------------------------------------------------------------------------------- Define Text2Cypher Tool (LangChain GraphCypherQAChain) ---------------------------------------------------------------------------------------------------------
 # This tool follows the LangChain `GraphCypherQAChain` concept used in
 # 08_text2cypher_workshop_demo.ipynb: it wraps the Neo4j database with a
@@ -265,6 +260,18 @@ text2cypher_tool = Tool(
     func=get_answer_for_query_text2cypher_lc,
     description=(
         TEXT2CYPHER_DESCRIPTION
+    )
+)
+
+# NOTE: The HybridCypher tool now uses the LangChain GraphCypherQAChain
+# text2cypher implementation (get_answer_for_query_text2cypher_lc) instead of
+# the older LCEL cypher-generation flow (get_rag_for_query_hybrid_cypher). The
+# LCEL helpers above are kept for reference but are no longer wired to the tool.
+hybrid_cypher_tool = Tool(
+    name="HybridCypher",
+    func=get_answer_for_query_text2cypher_lc,
+    description=(
+        HYBRID_CYPHER_DESCRIPTION
     )
 )
 
